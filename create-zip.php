@@ -1,58 +1,64 @@
 <?php
-header('Content-Type: application/json');
+// zip_backup.php
 
-// Postavi današnji datum i putanju do foldera
-$date = date('Y-m-d');
-$backupDir = __DIR__ . "/backup/$date/";
+// 1. Postavi datum i putanje
+$date     = date('Y-m-d');
+$srcDir   = __DIR__ . "/backup/{$date}/";
+$zipPath  = __DIR__ . "/backup/{$date}.zip";
 
-// Provera da li folder postoji
-if (!is_dir($backupDir)) {
+// 2. Proveri da li folder postoji
+if (!is_dir($srcDir)) {
     http_response_code(404);
-    echo json_encode(['error' => "Folder za datum $date ne postoji."]);
+    echo json_encode([
+        'error' => "Folder za datum {$date} ne postoji."
+    ]);
     exit;
 }
 
-// Skupi sve JSON fajlove iz foldera
-$jsonFiles = glob($backupDir . '*.json');
-if (empty($jsonFiles)) {
-    echo json_encode(['error' => 'Nema JSON fajlova za arhiviranje.']);
+// 3. Pronađi sve JSON fajlove u folderu
+$files = glob($srcDir . '*.json');
+if (empty($files)) {
+    http_response_code(200);
+    echo json_encode([
+        'message' => "Nema JSON fajlova za arhiviranje u {$srcDir}."
+    ]);
     exit;
 }
 
-// Definiši putanju za ZIP (smešten u backup root, pored podfoldera)
-$zipPath = __DIR__ . "/backup/{$date}.zip";
-
-// Kreiraj i otvori ZIP arhivu
+// 4. Otvori ZIP arhivu za kreiranje
 $zip = new ZipArchive();
 if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
     http_response_code(500);
-    echo json_encode(['error' => 'Ne mogu da kreiram ZIP arhivu.']);
+    echo json_encode([
+        'error' => "Ne mogu da napravim ZIP arhivu na putanji {$zipPath}."
+    ]);
     exit;
 }
 
-// Dodaj svaki JSON fajl u ZIP
-foreach ($jsonFiles as $file) {
-    $basename = basename($file);
-    if (!$zip->addFile($file, $basename)) {
-        // Ako ne može da doda fajl, prekini i izbriši ZIP
-        $zip->close();
-        @unlink($zipPath);
-        http_response_code(500);
-        echo json_encode(['error' => "Greška pri dodavanju fajla $basename u ZIP."]);
-        exit;
+// 5. Dodaj fajlove u ZIP
+foreach ($files as $file) {
+    $localName = basename($file);
+    if (!$zip->addFile($file, $localName)) {
+        error_log("Greška pri dodavanju fajla {$file} u ZIP.");
     }
 }
 
-// Zatvori ZIP arhivu
+// 6. Zatvori arhivu
 $zip->close();
 
-// Obriši originalne JSON fajlove
-foreach ($jsonFiles as $file) {
-    @unlink($file);
+// 7. Obriši originalne JSON fajlove
+$deleted = [];
+foreach ($files as $file) {
+    if (unlink($file)) {
+        $deleted[] = basename($file);
+    } else {
+        error_log("Greška pri brisanju fajla {$file}.");
+    }
 }
 
-// Vrati putanju do ZIP arhive
+// 8. Vrati rezultat
 echo json_encode([
-    'success' => true,
-    'zip'     => $zipPath
+    'success'   => true,
+    'zip_path'  => $zipPath,
+    'deleted'   => $deleted
 ]);
