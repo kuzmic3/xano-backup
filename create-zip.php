@@ -56,6 +56,11 @@ foreach ($files as $file) {
     }
 }
 
+// 8. Obriši sada prazan direktorijum
+if (is_dir($srcDir) && !rmdir($srcDir)) {
+    error_log("Greška pri brisanju direktorijuma {$srcDir}.");
+}
+
 // 8. Vrati rezultat
 echo json_encode([
     'success'   => true,
